@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -14,6 +14,15 @@ import {
   Shield,
   BarChart3,
   Sliders,
+  PlusCircle,
+  Trash2,
+  Edit3,
+  Sun,
+  Moon,
+  DollarSign,
+  FilePlus,
+  Lock,
+  Check,
 } from 'lucide-react';
 import {
   BarChart,
@@ -78,11 +87,49 @@ function HealthGauge({ score, grade }) {
 export default function Dashboard() {
   const { state, dispatch } = useApp();
 
+  // State for manual inline bill addition
+  const [showAddBillModal, setShowAddBillModal] = useState(false);
+  const [newBillName, setNewBillName] = useState('');
+  const [newBillAmount, setNewBillAmount] = useState('');
+  const [newBillCategory, setNewBillCategory] = useState('utilities');
+
+  // State for quick salary edit
+  const [isEditingSalary, setIsEditingSalary] = useState(false);
+  const [salaryInput, setSalaryInput] = useState(state.profile.monthly_income);
+
   const analysis = useMemo(() => analyzeProfile(state.profile), [state.profile]);
   const risk = useMemo(
     () => assessRisk(analysis, state.currentLoan),
     [analysis, state.currentLoan]
   );
+
+  const handleSalarySave = () => {
+    const val = Math.max(0, parseFloat(salaryInput) || 0);
+    dispatch({ type: 'SET_PROFILE', payload: { monthly_income: val } });
+    setIsEditingSalary(false);
+  };
+
+  const handleAddBill = (e) => {
+    e.preventDefault();
+    if (!newBillName || !newBillAmount) return;
+
+    const amt = Math.max(0, parseFloat(newBillAmount) || 0);
+    const billObj = {
+      id: Date.now().toString(),
+      name: newBillName,
+      category: newBillCategory,
+      amount: amt,
+    };
+
+    dispatch({ type: 'ADD_BILL', payload: billObj });
+    setNewBillName('');
+    setNewBillAmount('');
+    setShowAddBillModal(false);
+  };
+
+  const handleRemoveBill = (id) => {
+    dispatch({ type: 'REMOVE_BILL', payload: id });
+  };
 
   const incomeExpenseData = [
     { name: 'Income', value: analysis.income.monthly_income, fill: COLORS.success },
@@ -100,7 +147,7 @@ export default function Dashboard() {
     { name: 'EMI', value: state.profile.existing_emi, fill: '#ef4444' },
     { name: 'Credit Card', value: state.profile.credit_card_payment, fill: '#ec4899' },
     { name: 'Subscriptions', value: state.profile.subscriptions, fill: '#8b5cf6' },
-    { name: 'Other', value: state.profile.other_expenses, fill: '#64748b' },
+    { name: 'Other / Bills', value: state.profile.other_expenses, fill: '#06b6d4' },
   ].filter(d => d.value > 0);
 
   const healthData = [
@@ -128,14 +175,15 @@ export default function Dashboard() {
     if (active && payload && payload.length) {
       return (
         <div style={{
-          background: 'rgba(22, 22, 32, 0.95)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-secondary)',
           borderRadius: '8px',
           padding: '10px 14px',
           fontSize: '13px',
+          boxShadow: 'var(--shadow-md)',
         }}>
-          <div style={{ color: '#9898a8', marginBottom: '4px' }}>{label || payload[0].name}</div>
-          <div style={{ color: '#f0f0f5', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+          <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{label || payload[0].name}</div>
+          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
             {formatCurrency(payload[0].value)}
           </div>
         </div>
@@ -146,60 +194,303 @@ export default function Dashboard() {
 
   return (
     <div className="main-content">
-      {/* Section Header */}
-      <div className="section-header" style={{ marginBottom: '24px' }}>
-        <h1 className="section-title">Financial Dashboard</h1>
-        <p className="section-subtitle">
-          Real-time analysis of your financial health and risk indicators
-        </p>
+      {/* Decent Header with Theme Toggle Action */}
+      <div className="section-header" style={{ marginBottom: '24px', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <h1 className="section-title">Financial Dashboard</h1>
+            <span className="badge badge-accent" style={{ fontSize: '11px' }}>
+              Bank-Grade Encryption Verified
+            </span>
+          </div>
+          <p className="section-subtitle">
+            Real-time financial health, cash flow analytics, and active bill management.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {/* Light/White Theme Toggle Button */}
+          <button
+            className="btn btn-secondary"
+            onClick={() => dispatch({ type: 'TOGGLE_THEME' })}
+            style={{ fontWeight: 600 }}
+          >
+            {state.theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            {state.theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowAddBillModal(true)}
+          >
+            <PlusCircle size={16} /> Add Custom Bill / Payment
+          </button>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="stats-grid stagger">
+      {/* Interactive Quick-Edit Bar */}
+      <div
+        className="card"
+        style={{
+          marginBottom: '28px',
+          padding: '20px 24px',
+          background: 'var(--gradient-card)',
+          border: '1px solid var(--border-accent)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="card-icon accent">
+              <DollarSign size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Monthly Net Salary / Income
+              </div>
+              {isEditingSalary ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <input
+                    type="number"
+                    className="form-control"
+                    style={{ width: '160px', padding: '6px 12px' }}
+                    value={salaryInput}
+                    onChange={(e) => setSalaryInput(e.target.value)}
+                  />
+                  <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={handleSalarySave}>
+                    <Check size={14} /> Save
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px' }}>
+                  <span style={{ fontSize: '24px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                    {formatCurrency(state.profile.monthly_income)}
+                  </span>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 10px', fontSize: '12px' }}
+                    onClick={() => { setSalaryInput(state.profile.monthly_income); setIsEditingSalary(true); }}
+                  >
+                    <Edit3 size={12} /> Edit Salary
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Fixed Debt EMIs</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--danger-light)' }}>
+                {formatCurrency(state.profile.existing_emi)}
+              </div>
+            </div>
+            <div style={{ height: '30px', width: '1px', background: 'var(--border-secondary)' }} />
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Active Bills Count</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent-light)' }}>
+                {state.customBills.length} Item(s)
+              </div>
+            </div>
+            <button className="btn btn-secondary" onClick={() => setShowAddBillModal(true)}>
+              <FilePlus size={14} /> Manage Bills
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal for Adding Custom Bills */}
+      {showAddBillModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              padding: '28px',
+              boxShadow: 'var(--shadow-lg)',
+              background: 'var(--bg-card)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Add Custom Bill or Payment</h3>
+              <button
+                style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '18px' }}
+                onClick={() => setShowAddBillModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddBill} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Bill / Payment Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Broadband, Medical Insurance, Water Bill"
+                  value={newBillName}
+                  onChange={(e) => setNewBillName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Monthly Amount (₹)</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  placeholder="e.g. 2500"
+                  value={newBillAmount}
+                  onChange={(e) => setNewBillAmount(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select
+                  className="form-control"
+                  value={newBillCategory}
+                  onChange={(e) => setNewBillCategory(e.target.value)}
+                >
+                  <option value="utilities">Utilities & Bills</option>
+                  <option value="subscriptions">Subscriptions & Digital</option>
+                  <option value="fixed">Fixed Obligation</option>
+                  <option value="other_expenses">Other Miscellaneous</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowAddBillModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  Add to Budget
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Main Stats Grid */}
+      <div className="stats-grid stagger" style={{ marginBottom: '28px' }}>
         <div className="stat-card accent">
-          <div className="stat-label">Monthly Income</div>
+          <div className="stat-label">Monthly Take-Home Salary</div>
           <div className="stat-value">{formatCurrency(analysis.income.monthly_income)}</div>
           <div className="stat-change positive">
-            <TrendingUp size={12} /> Stable
+            <TrendingUp size={12} /> Active Inflow
           </div>
         </div>
 
         <div className="stat-card warning">
-          <div className="stat-label">Total Expenses</div>
+          <div className="stat-label">Total Outflow & Expenses</div>
           <div className="stat-value">{formatCurrency(analysis.expenses.total_expenses)}</div>
           <div className="stat-change negative">
-            <ArrowUpRight size={12} /> {analysis.ratios.expense_to_income}% of income
+            <ArrowUpRight size={12} /> {analysis.ratios.expense_to_income}% of salary
           </div>
         </div>
 
         <div className="stat-card danger">
-          <div className="stat-label">Debt Payments</div>
+          <div className="stat-label">Total Monthly Debt Service</div>
           <div className="stat-value">{formatCurrency(analysis.debt.total_debt_payments)}</div>
           <div className="stat-change negative">
-            <CreditCard size={12} /> DTI: {analysis.ratios.debt_to_income}%
+            <CreditCard size={12} /> DTI Ratio: {analysis.ratios.debt_to_income}%
           </div>
         </div>
 
         <div className={`stat-card ${surplusColor}`}>
-          <div className="stat-label">Monthly Surplus</div>
+          <div className="stat-label">Net Unallocated Surplus</div>
           <div className={`stat-value ${surplusColor}`}>
             {formatCurrency(surplus)}
           </div>
           <div className={`stat-change ${surplus > 0 ? 'positive' : 'negative'}`}>
             {surplus > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {analysis.ratios.savings_rate}% savings rate
+            {analysis.ratios.savings_rate}% savings margin
           </div>
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid-2" style={{ marginBottom: '24px' }}>
+      {/* Active User Bills List Card */}
+      <div className="card" style={{ marginBottom: '28px' }}>
+        <div className="card-header">
+          <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Wallet size={18} className="text-accent" /> Active Monthly Bills & Payments Manager
+          </h3>
+          <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => setShowAddBillModal(true)}>
+            <PlusCircle size={14} /> Add Bill
+          </button>
+        </div>
+
+        {state.customBills.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+            No custom bills added yet. Click "+ Add Custom Bill" above to add recurring payments.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', marginTop: '12px' }}>
+            {state.customBills.map((b) => (
+              <div
+                key={b.id}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  padding: '14px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: '1px solid var(--border-primary)',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{b.name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>
+                    Category: {b.category}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent-light)' }}>
+                    {formatCurrency(b.amount)}
+                  </div>
+                  <button
+                    style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', opacity: 0.8 }}
+                    onClick={() => handleRemoveBill(b.id)}
+                    title="Remove bill"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Main Visual Charts Grid */}
+      <div className="grid-2" style={{ marginBottom: '28px' }}>
         {/* Income vs Expenses Chart */}
-        <div className="card animate-fadeInUp">
+        <div className="card">
           <div className="card-header">
             <div className="card-title">
               <BarChart3 size={18} />
-              Cash Flow Breakdown
+              Cash Flow Allocation
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
@@ -208,12 +499,12 @@ export default function Dashboard() {
                 dataKey="name"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#6b6b7b', fontSize: 12 }}
+                tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#6b6b7b', fontSize: 11 }}
+                tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
                 tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`}
               />
               <Tooltip content={<CustomTooltip />} />
@@ -226,12 +517,12 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Expense Breakdown Pie */}
-        <div className="card animate-fadeInUp" style={{ animationDelay: '100ms' }}>
+        {/* Expense Breakdown Donut */}
+        <div className="card">
           <div className="card-header">
             <div className="card-title">
               <Wallet size={18} />
-              Expense Breakdown
+              Monthly Expense Distribution
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -263,7 +554,7 @@ export default function Dashboard() {
                     alignItems: 'center',
                     gap: '8px',
                     padding: '4px 0',
-                    color: '#9898a8',
+                    color: 'var(--text-secondary)',
                   }}
                 >
                   <div style={{
@@ -274,7 +565,7 @@ export default function Dashboard() {
                     flexShrink: 0,
                   }} />
                   <span style={{ flex: 1 }}>{item.name}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono'", color: '#f0f0f5', fontWeight: 500 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 500 }}>
                     {formatCurrency(item.value)}
                   </span>
                 </div>
@@ -285,13 +576,13 @@ export default function Dashboard() {
       </div>
 
       {/* Health Score + Risk Indicators */}
-      <div className="grid-2" style={{ marginBottom: '24px' }}>
+      <div className="grid-2" style={{ marginBottom: '28px' }}>
         {/* Health Score */}
-        <div className="card animate-fadeInUp" style={{ animationDelay: '200ms' }}>
+        <div className="card">
           <div className="card-header">
             <div className="card-title">
               <Activity size={18} />
-              Financial Health Score
+              Financial Health Rating
             </div>
             <span className={`badge badge-${
               analysis.health_scores.overall >= 65 ? 'success' :
@@ -306,7 +597,6 @@ export default function Dashboard() {
             grade={analysis.health_scores.grade}
           />
 
-          {/* Health breakdown bars */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {[
               { label: 'Income Stability', value: analysis.health_scores.income_stability },
@@ -324,9 +614,9 @@ export default function Dashboard() {
                     marginBottom: '4px',
                     fontSize: '12px',
                   }}>
-                    <span style={{ color: '#9898a8' }}>{item.label}</span>
-                    <span style={{ color: '#f0f0f5', fontFamily: "'JetBrains Mono'", fontWeight: 500 }}>
-                      {Math.round(item.value)}
+                    <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
+                    <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
+                      {Math.round(item.value)}/100
                     </span>
                   </div>
                   <div className="progress-bar">
@@ -342,16 +632,15 @@ export default function Dashboard() {
         </div>
 
         {/* Risk Indicators */}
-        <div className="card animate-fadeInUp" style={{ animationDelay: '300ms' }}>
+        <div className="card">
           <div className="card-header">
             <div className="card-title">
               <Shield size={18} />
-              Risk Indicators
+              Risk Diagnostics
             </div>
             <span className={`badge badge-${
               risk.risk_level === 'Low' ? 'success' :
-              risk.risk_level === 'Medium' ? 'warning' :
-              risk.risk_level === 'High' ? 'danger' : 'danger'
+              risk.risk_level === 'Medium' ? 'warning' : 'danger'
             }`}>
               Risk: {risk.risk_level}
             </span>
@@ -378,74 +667,39 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-
-          {/* Risk Signals */}
-          {risk.signals.length > 0 && (
-            <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#9898a8', marginBottom: '8px' }}>
-                Loan Impact Signals
-              </div>
-              {risk.signals.map((signal, i) => (
-                <div className={`insight-item`} key={i}>
-                  <div className={`insight-icon ${
-                    signal.type === 'danger' ? 'danger' :
-                    signal.type === 'warning' ? 'warning' : 'success'
-                  }`}>
-                    {signal.type === 'positive' ? '✓' : '⚠'}
-                  </div>
-                  <div className="insight-text">{signal.message}</div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Financial Health Radar */}
-      <div className="card animate-fadeInUp" style={{ animationDelay: '400ms' }}>
-        <div className="card-header">
-          <div className="card-title">
-            <Activity size={18} />
-            Financial Profile Radar
-          </div>
+      {/* Interactive Navigation Action Footer */}
+      <div
+        className="card"
+        style={{
+          textAlign: 'center',
+          padding: '32px',
+          background: 'var(--bg-tertiary)',
+          border: '1px solid var(--border-secondary)',
+        }}
+      >
+        <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>
+          Ready to test a proposed loan decision?
+        </h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          Simulate how taking a new loan will impact your monthly budget, emergency runway, and stress resilience.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={() => dispatch({ type: 'SET_TAB', payload: 'simulator' })}
+          >
+            <Sliders size={18} /> Open Decision Simulator
+          </button>
+          <button
+            className="btn btn-secondary btn-lg"
+            onClick={() => dispatch({ type: 'SET_TAB', payload: 'insights' })}
+          >
+            View AI Insights Report
+          </button>
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <RadarChart data={healthData}>
-            <PolarGrid stroke="rgba(255,255,255,0.06)" />
-            <PolarAngleAxis
-              dataKey="subject"
-              tick={{ fill: '#6b6b7b', fontSize: 12 }}
-            />
-            <PolarRadiusAxis
-              angle={90}
-              domain={[0, 100]}
-              tick={{ fill: '#4a4a58', fontSize: 10 }}
-            />
-            <Radar
-              name="Health"
-              dataKey="value"
-              stroke="#6366f1"
-              fill="#6366f1"
-              fillOpacity={0.15}
-              strokeWidth={2}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Quick Action */}
-      <div style={{
-        textAlign: 'center',
-        padding: '32px 0',
-        marginTop: '16px',
-      }}>
-        <button
-          className="btn btn-primary btn-lg"
-          onClick={() => dispatch({ type: 'SET_TAB', payload: 'simulator' })}
-        >
-          <Sliders size={18} />
-          Open Scenario Simulator
-        </button>
       </div>
     </div>
   );

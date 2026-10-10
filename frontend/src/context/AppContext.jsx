@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
 
 const AppContext = createContext(null);
 
 const initialState = {
+  theme: 'dark', // 'dark' | 'light'
+
   // Financial Profile
   profile: {
     monthly_income: 60000,
@@ -16,6 +18,13 @@ const initialState = {
     other_expenses: 0,
     savings: 50000,
   },
+
+  // Custom User Added Bills
+  customBills: [
+    { id: '1', name: 'Electricity Bill', category: 'utilities', amount: 2500 },
+    { id: '2', name: 'Wifi & Broadband', category: 'subscriptions', amount: 1200 },
+    { id: '3', name: 'Health Insurance Premium', category: 'fixed', amount: 3500 },
+  ],
 
   // Loan being considered
   currentLoan: {
@@ -53,8 +62,45 @@ const initialState = {
 
 function reducer(state, action) {
   switch (action.type) {
+    case 'TOGGLE_THEME': {
+      const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', nextTheme);
+      return { ...state, theme: nextTheme };
+    }
+    case 'SET_THEME': {
+      document.documentElement.setAttribute('data-theme', action.payload);
+      return { ...state, theme: action.payload };
+    }
     case 'SET_PROFILE':
       return { ...state, profile: { ...state.profile, ...action.payload } };
+    case 'ADD_BILL': {
+      const bill = action.payload;
+      const updatedBills = [bill, ...state.customBills];
+      // Update corresponding expense category in profile
+      let currentVal = state.profile[bill.category] || state.profile.other_expenses || 0;
+      return {
+        ...state,
+        customBills: updatedBills,
+        profile: {
+          ...state.profile,
+          other_expenses: state.profile.other_expenses + bill.amount,
+        },
+      };
+    }
+    case 'REMOVE_BILL': {
+      const billId = action.payload;
+      const removed = state.customBills.find(b => b.id === billId);
+      const updatedBills = state.customBills.filter(b => b.id !== billId);
+      const amountToSubtract = removed ? removed.amount : 0;
+      return {
+        ...state,
+        customBills: updatedBills,
+        profile: {
+          ...state.profile,
+          other_expenses: Math.max(0, state.profile.other_expenses - amountToSubtract),
+        },
+      };
+    }
     case 'SET_CURRENT_LOAN':
       return { ...state, currentLoan: { ...state.currentLoan, ...action.payload } };
     case 'SET_COMPARE_LOAN':
@@ -86,6 +132,10 @@ function reducer(state, action) {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', state.theme);
+  }, [state.theme]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
