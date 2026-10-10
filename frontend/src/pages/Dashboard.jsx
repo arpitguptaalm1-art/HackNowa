@@ -97,7 +97,35 @@ export default function Dashboard() {
   const [isEditingSalary, setIsEditingSalary] = useState(false);
   const [salaryInput, setSalaryInput] = useState(state.profile.monthly_income);
 
-  const analysis = useMemo(() => analyzeProfile(state.profile), [state.profile]);
+  // State for quick EMI edit
+  const [isEditingEMI, setIsEditingEMI] = useState(false);
+  const [emiInput, setEmiInput] = useState(state.profile.existing_emi);
+
+  // State for quick Rent / Commitments edit modal
+  const [showEditCommitmentsModal, setShowEditCommitmentsModal] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({
+    monthly_income: state.profile.monthly_income,
+    existing_emi: state.profile.existing_emi,
+    rent: state.profile.rent,
+    credit_card_payment: state.profile.credit_card_payment,
+    food: state.profile.food,
+    transport: state.profile.transport,
+    utilities: state.profile.utilities,
+    savings: state.profile.savings,
+  });
+
+  const customBillsTotal = useMemo(() => {
+    return state.customBills.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
+  }, [state.customBills]);
+
+  const effectiveProfile = useMemo(() => {
+    return {
+      ...state.profile,
+      other_expenses: customBillsTotal,
+    };
+  }, [state.profile, customBillsTotal]);
+
+  const analysis = useMemo(() => analyzeProfile(effectiveProfile), [effectiveProfile]);
   const risk = useMemo(
     () => assessRisk(analysis, state.currentLoan),
     [analysis, state.currentLoan]
@@ -107,6 +135,44 @@ export default function Dashboard() {
     const val = Math.max(0, parseFloat(salaryInput) || 0);
     dispatch({ type: 'SET_PROFILE', payload: { monthly_income: val } });
     setIsEditingSalary(false);
+  };
+
+  const handleEMISave = () => {
+    const val = Math.max(0, parseFloat(emiInput) || 0);
+    dispatch({ type: 'SET_PROFILE', payload: { existing_emi: val } });
+    setIsEditingEMI(false);
+  };
+
+  const handleOpenEditModal = () => {
+    setEditProfileForm({
+      monthly_income: state.profile.monthly_income,
+      existing_emi: state.profile.existing_emi,
+      rent: state.profile.rent,
+      credit_card_payment: state.profile.credit_card_payment,
+      food: state.profile.food,
+      transport: state.profile.transport,
+      utilities: state.profile.utilities,
+      savings: state.profile.savings,
+    });
+    setShowEditCommitmentsModal(true);
+  };
+
+  const handleSaveCommitmentsModal = (e) => {
+    e.preventDefault();
+    dispatch({
+      type: 'SET_PROFILE',
+      payload: {
+        monthly_income: Math.max(0, parseFloat(editProfileForm.monthly_income) || 0),
+        existing_emi: Math.max(0, parseFloat(editProfileForm.existing_emi) || 0),
+        rent: Math.max(0, parseFloat(editProfileForm.rent) || 0),
+        credit_card_payment: Math.max(0, parseFloat(editProfileForm.credit_card_payment) || 0),
+        food: Math.max(0, parseFloat(editProfileForm.food) || 0),
+        transport: Math.max(0, parseFloat(editProfileForm.transport) || 0),
+        utilities: Math.max(0, parseFloat(editProfileForm.utilities) || 0),
+        savings: Math.max(0, parseFloat(editProfileForm.savings) || 0),
+      },
+    });
+    setShowEditCommitmentsModal(false);
   };
 
   const handleAddBill = (e) => {
@@ -140,14 +206,14 @@ export default function Dashboard() {
   ];
 
   const expenseBreakdown = [
-    { name: 'Rent', value: state.profile.rent, fill: '#6366f1' },
-    { name: 'Food', value: state.profile.food, fill: '#10b981' },
-    { name: 'Transport', value: state.profile.transport, fill: '#3b82f6' },
-    { name: 'Utilities', value: state.profile.utilities, fill: '#f59e0b' },
-    { name: 'EMI', value: state.profile.existing_emi, fill: '#ef4444' },
-    { name: 'Credit Card', value: state.profile.credit_card_payment, fill: '#ec4899' },
-    { name: 'Subscriptions', value: state.profile.subscriptions, fill: '#8b5cf6' },
-    { name: 'Other / Bills', value: state.profile.other_expenses, fill: '#06b6d4' },
+    { name: 'Rent', value: effectiveProfile.rent, fill: '#6366f1' },
+    { name: 'Food', value: effectiveProfile.food, fill: '#10b981' },
+    { name: 'Transport', value: effectiveProfile.transport, fill: '#3b82f6' },
+    { name: 'Utilities', value: effectiveProfile.utilities, fill: '#f59e0b' },
+    { name: 'EMI', value: effectiveProfile.existing_emi, fill: '#ef4444' },
+    { name: 'Credit Card', value: effectiveProfile.credit_card_payment, fill: '#ec4899' },
+    { name: 'Subscriptions', value: effectiveProfile.subscriptions, fill: '#8b5cf6' },
+    { name: 'Active Custom Bills', value: customBillsTotal, fill: '#06b6d4' },
   ].filter(d => d.value > 0);
 
   const healthData = [
@@ -238,12 +304,13 @@ export default function Dashboard() {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          {/* Salary Section */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div className="card-icon accent">
               <DollarSign size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Monthly Net Salary / Income
               </div>
               {isEditingSalary ? (
@@ -251,51 +318,221 @@ export default function Dashboard() {
                   <input
                     type="number"
                     className="form-control"
-                    style={{ width: '160px', padding: '6px 12px' }}
+                    style={{ width: '150px', padding: '4px 10px', fontSize: '14px' }}
                     value={salaryInput}
                     onChange={(e) => setSalaryInput(e.target.value)}
+                    autoFocus
                   />
-                  <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={handleSalarySave}>
+                  <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={handleSalarySave}>
                     <Check size={14} /> Save
                   </button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px' }}>
-                  <span style={{ fontSize: '24px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                  <span style={{ fontSize: '22px', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                     {formatCurrency(state.profile.monthly_income)}
                   </span>
                   <button
                     className="btn btn-secondary"
-                    style={{ padding: '4px 10px', fontSize: '12px' }}
+                    style={{ padding: '3px 8px', fontSize: '11px' }}
                     onClick={() => { setSalaryInput(state.profile.monthly_income); setIsEditingSalary(true); }}
                   >
-                    <Edit3 size={12} /> Edit Salary
+                    <Edit3 size={11} /> Edit Salary
                   </button>
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          {/* Commitments & Bills Quick Edit Items */}
+          <div style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Fixed Debt EMIs */}
             <div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Fixed Debt EMIs</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--danger-light)' }}>
-                {formatCurrency(state.profile.existing_emi)}
-              </div>
+              {isEditingEMI ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <input
+                    type="number"
+                    className="form-control"
+                    style={{ width: '120px', padding: '4px 8px', fontSize: '13px' }}
+                    value={emiInput}
+                    onChange={(e) => setEmiInput(e.target.value)}
+                    autoFocus
+                  />
+                  <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleEMISave}>
+                    <Check size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <span style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--danger-light)' }}>
+                    {formatCurrency(state.profile.existing_emi)}
+                  </span>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ padding: '2px 6px', fontSize: '10px' }}
+                    title="Edit Fixed Debt EMI"
+                    onClick={() => { setEmiInput(state.profile.existing_emi); setIsEditingEMI(true); }}
+                  >
+                    <Edit3 size={10} /> Edit EMI
+                  </button>
+                </div>
+              )}
             </div>
+
             <div style={{ height: '30px', width: '1px', background: 'var(--border-secondary)' }} />
+
+            {/* Active Bills Count */}
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Active Bills Count</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Active Bills</div>
               <div style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent-light)' }}>
                 {state.customBills.length} Item(s)
               </div>
             </div>
-            <button className="btn btn-secondary" onClick={() => setShowAddBillModal(true)}>
-              <FilePlus size={14} /> Manage Bills
-            </button>
+
+            <div style={{ height: '30px', width: '1px', background: 'var(--border-secondary)' }} />
+
+            {/* Comprehensive Edit Buttons */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-secondary" style={{ fontSize: '13px' }} onClick={handleOpenEditModal}>
+                <Sliders size={14} /> Edit All Values
+              </button>
+              <button className="btn btn-primary" style={{ fontSize: '13px' }} onClick={() => setShowAddBillModal(true)}>
+                <FilePlus size={14} /> Manage Bills
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Modal for Editing All Financial Commitments / Values */}
+      {showEditCommitmentsModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '560px',
+              padding: '28px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-secondary)',
+              boxShadow: 'var(--shadow-xl)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 className="card-title" style={{ fontSize: '18px', margin: 0 }}>
+                <Sliders size={20} style={{ color: 'var(--accent)' }} /> Edit Financial Commitments & Income
+              </h3>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '4px 10px', fontSize: '12px' }}
+                onClick={() => setShowEditCommitmentsModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCommitmentsModal}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div>
+                  <label className="form-label">Monthly Income (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.monthly_income}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, monthly_income: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Fixed Debt EMIs (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.existing_emi}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, existing_emi: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label">House Rent (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.rent}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, rent: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Credit Card Payments (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.credit_card_payment}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, credit_card_payment: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Food & Household (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.food}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, food: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Utilities & Subscriptions (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.utilities}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, utilities: e.target.value })}
+                  />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Total Liquid Savings / Cash Reserves (₹)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editProfileForm.savings}
+                    onChange={(e) => setEditProfileForm({ ...editProfileForm, savings: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditCommitmentsModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  <Check size={16} /> Save & Recalculate Dashboard
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal for Adding Custom Bills */}
       {showAddBillModal && (

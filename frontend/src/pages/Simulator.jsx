@@ -52,31 +52,48 @@ export default function Simulator() {
     [loanAmount, newEmi, tenureYears]
   );
 
+  // Synchronize Custom Bills Total
+  const customBillsTotal = useMemo(() => {
+    if (!state.customBills) return state.profile.other_expenses || 0;
+    return state.customBills.reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0);
+  }, [state.customBills, state.profile.other_expenses]);
+
+  // Base profile with accurate custom bills
+  const effectiveBaseProfile = useMemo(() => {
+    return {
+      ...state.profile,
+      other_expenses: customBillsTotal,
+    };
+  }, [state.profile, customBillsTotal]);
+
   // Stressed profile calculation
   const stressedProfile = useMemo(() => {
-    const origIncome = state.profile.monthly_income;
+    const origIncome = parseFloat(state.profile.monthly_income) || 0;
     const effectiveIncome = jobLossMonths > 0 ? 0 : origIncome * (1 - salaryCut / 100);
-    const effectiveExpenses = state.profile.food * (1 + expenseInflation / 100) +
-      state.profile.rent +
-      state.profile.transport * (1 + expenseInflation / 100) +
-      state.profile.utilities +
-      state.profile.subscriptions +
-      state.profile.other_expenses;
+    const foodVal = (parseFloat(state.profile.food) || 0) * (1 + expenseInflation / 100);
+    const transportVal = (parseFloat(state.profile.transport) || 0) * (1 + expenseInflation / 100);
 
     return {
       ...state.profile,
-      monthly_income: effectiveIncome,
-      food: state.profile.food * (1 + expenseInflation / 100),
-      transport: state.profile.transport * (1 + expenseInflation / 100),
+      monthly_income: Math.max(0, effectiveIncome),
+      food: foodVal,
+      transport: transportVal,
+      other_expenses: customBillsTotal,
     };
-  }, [state.profile, salaryCut, expenseInflation, jobLossMonths]);
+  }, [state.profile, customBillsTotal, salaryCut, expenseInflation, jobLossMonths]);
 
   // Baseline Risk (without new loan)
-  const baseAnalysis = useMemo(() => analyzeProfile(state.profile), [state.profile]);
+  const baseAnalysis = useMemo(() => analyzeProfile(effectiveBaseProfile), [effectiveBaseProfile]);
   const baseRisk = useMemo(() => assessRisk(baseAnalysis, null), [baseAnalysis]);
 
   // Stressed Risk with New Loan
-  const simulatedLoan = { loan_amount: loanAmount, interest_rate: interestRate, tenure_years: tenureYears, label: 'Simulated Loan' };
+  const simulatedLoan = useMemo(() => ({
+    loan_amount: loanAmount,
+    interest_rate: interestRate,
+    tenure_years: tenureYears,
+    label: 'Simulated Loan',
+  }), [loanAmount, interestRate, tenureYears]);
+
   const stressedAnalysis = useMemo(() => analyzeProfile(stressedProfile), [stressedProfile]);
   const simulatedRisk = useMemo(() => assessRisk(stressedAnalysis, simulatedLoan), [
     stressedAnalysis,
@@ -101,8 +118,8 @@ export default function Simulator() {
   // Buffer projections chart data (over 12 months)
   const projectionData = useMemo(() => {
     const data = [];
-    let currentSavings = state.profile.savings;
-    const monthlySurplus = stressedAnalysis.cash_flow.monthly_surplus - newEmi;
+    let currentSavings = parseFloat(state.profile.savings) || 0;
+    const monthlySurplus = (stressedAnalysis.cash_flow.monthly_surplus || 0) - (newEmi || 0);
 
     for (let m = 1; m <= 12; m++) {
       currentSavings += monthlySurplus;
@@ -165,7 +182,7 @@ export default function Simulator() {
                 max="5000000"
                 step="25000"
                 value={loanAmount}
-                onChange={(e) => setLoanAmount(parseFloat(e.target.value))}
+                onChange={(e) => setLoanAmount(parseFloat(e.target.value) || 50000)}
                 style={{ width: '100%', accentColor: 'var(--accent)' }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
@@ -189,7 +206,7 @@ export default function Simulator() {
                 max="24"
                 step="0.25"
                 value={interestRate}
-                onChange={(e) => setInterestRate(parseFloat(e.target.value))}
+                onChange={(e) => setInterestRate(parseFloat(e.target.value) || 6)}
                 style={{ width: '100%', accentColor: 'var(--accent)' }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
@@ -213,7 +230,7 @@ export default function Simulator() {
                 max="30"
                 step="1"
                 value={tenureYears}
-                onChange={(e) => setTenureYears(parseInt(e.target.value))}
+                onChange={(e) => setTenureYears(parseInt(e.target.value) || 1)}
                 style={{ width: '100%', accentColor: 'var(--accent)' }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
@@ -267,7 +284,7 @@ export default function Simulator() {
                 max="50"
                 step="5"
                 value={salaryCut}
-                onChange={(e) => setSalaryCut(parseInt(e.target.value))}
+                onChange={(e) => setSalaryCut(parseInt(e.target.value) || 0)}
                 style={{ width: '100%', accentColor: 'var(--warning)' }}
               />
             </div>
@@ -284,7 +301,7 @@ export default function Simulator() {
                 max="40"
                 step="5"
                 value={expenseInflation}
-                onChange={(e) => setExpenseInflation(parseInt(e.target.value))}
+                onChange={(e) => setExpenseInflation(parseInt(e.target.value) || 0)}
                 style={{ width: '100%', accentColor: 'var(--warning)' }}
               />
             </div>
@@ -301,7 +318,7 @@ export default function Simulator() {
                 max="12"
                 step="1"
                 value={jobLossMonths}
-                onChange={(e) => setJobLossMonths(parseInt(e.target.value))}
+                onChange={(e) => setJobLossMonths(parseInt(e.target.value) || 0)}
                 style={{ width: '100%', accentColor: 'var(--danger)' }}
               />
             </div>
@@ -340,7 +357,7 @@ export default function Simulator() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0' }}>
             <div>
               <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Baseline Score</div>
-              <div style={{ fontSize: '24px', fontWeight: 700 }}>{Math.round(baseRisk.risk_score)}</div>
+              <div style={{ fontSize: '24px', fontWeight: 700 }}>{Math.round(baseRisk.risk_score || 0)}</div>
             </div>
             <div style={{ fontSize: '20px', color: 'var(--text-tertiary)' }}>→</div>
             <div>
@@ -352,13 +369,15 @@ export default function Simulator() {
                   color: simulatedRisk.risk_score > 65 ? 'var(--danger)' : simulatedRisk.risk_score > 40 ? 'var(--warning)' : 'var(--success)',
                 }}
               >
-                {Math.round(simulatedRisk.risk_score)}
+                {Math.round(simulatedRisk.risk_score || 0)}
               </div>
             </div>
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Taking this EMI increases your total DTI ratio from {baseAnalysis.ratios.debt_to_income}% to{' '}
-            {Math.round(((baseAnalysis.debt.total_debt_payments + newEmi) / state.profile.monthly_income) * 100)}%.
+            {effectiveBaseProfile.monthly_income > 0
+              ? Math.round(((baseAnalysis.debt.total_debt_payments + newEmi) / effectiveBaseProfile.monthly_income) * 100)
+              : 100}%.
           </p>
         </div>
 
@@ -398,10 +417,12 @@ export default function Simulator() {
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             You will retain{' '}
-            {Math.max(
-              0,
-              Math.round(((baseAnalysis.cash_flow.monthly_surplus - newEmi) / state.profile.monthly_income) * 100)
-            )}
+            {effectiveBaseProfile.monthly_income > 0
+              ? Math.max(
+                  0,
+                  Math.round(((baseAnalysis.cash_flow.monthly_surplus - newEmi) / effectiveBaseProfile.monthly_income) * 100)
+                )
+              : 0}
             % of your salary after all EMIs and living expenses.
           </p>
         </div>
@@ -414,10 +435,12 @@ export default function Simulator() {
           </div>
           <div style={{ margin: '16px 0' }}>
             <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--info-light)' }}>
-              {Math.max(0, (state.profile.savings / (baseAnalysis.expenses.total_expenses + newEmi)).toFixed(1))} Months
+              {(baseAnalysis.expenses.total_expenses + newEmi) > 0
+                ? Math.max(0, parseFloat((state.profile.savings / (baseAnalysis.expenses.total_expenses + newEmi)).toFixed(1))).toFixed(1)
+                : '12.0'} Months
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-              Time before liquid savings (₹{state.profile.savings.toLocaleString('en-IN')}) deplete if income stops completely.
+              Time before liquid savings ({formatCurrency(state.profile.savings)}) deplete if income stops completely.
             </div>
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>

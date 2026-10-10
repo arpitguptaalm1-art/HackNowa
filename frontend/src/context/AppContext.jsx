@@ -25,40 +25,13 @@ const initialState = {
     { id: '2', name: 'Wifi & Broadband', category: 'subscriptions', amount: 1200 },
     { id: '3', name: 'Health Insurance Premium', category: 'fixed', amount: 3500 },
   ],
-
-  // Loan being considered
-  currentLoan: {
-    loan_amount: 500000,
-    interest_rate: 12,
-    tenure_years: 5,
-    processing_fee: 5000,
-    label: 'Loan A',
-  },
-
-  // Compare loan
-  compareLoan: {
-    loan_amount: 500000,
-    interest_rate: 13,
-    tenure_years: 4,
-    processing_fee: 2000,
-    label: 'Loan B',
-  },
-
-  // Analysis results
-  analysis: null,
-  riskData: null,
-  scenarioData: null,
-  comparisonData: null,
-  explanation: null,
-
-  // Document data
-  documentData: null,
-
-  // UI state
-  isLoading: false,
-  activeTab: 'dashboard',
-  error: null,
 };
+
+// Compute initial other_expenses from initial customBills
+initialState.profile.other_expenses = initialState.customBills.reduce(
+  (sum, b) => sum + (parseFloat(b.amount) || 0),
+  0
+);
 
 function reducer(state, action) {
   switch (action.type) {
@@ -76,28 +49,26 @@ function reducer(state, action) {
     case 'ADD_BILL': {
       const bill = action.payload;
       const updatedBills = [bill, ...state.customBills];
-      // Update corresponding expense category in profile
-      let currentVal = state.profile[bill.category] || state.profile.other_expenses || 0;
+      const newBillsTotal = updatedBills.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
       return {
         ...state,
         customBills: updatedBills,
         profile: {
           ...state.profile,
-          other_expenses: state.profile.other_expenses + bill.amount,
+          other_expenses: newBillsTotal,
         },
       };
     }
     case 'REMOVE_BILL': {
       const billId = action.payload;
-      const removed = state.customBills.find(b => b.id === billId);
       const updatedBills = state.customBills.filter(b => b.id !== billId);
-      const amountToSubtract = removed ? removed.amount : 0;
+      const newBillsTotal = updatedBills.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
       return {
         ...state,
         customBills: updatedBills,
         profile: {
           ...state.profile,
-          other_expenses: Math.max(0, state.profile.other_expenses - amountToSubtract),
+          other_expenses: newBillsTotal,
         },
       };
     }
